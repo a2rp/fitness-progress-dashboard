@@ -81,13 +81,21 @@ const FitnessProgressDashboard = () => {
     };
     const exportCsv = () => {
         const rows = [["Date", "Activity", "Category", "Minutes", "Effort", "Note"], ...sessions.map((item) => [item.date, item.name, item.category, item.minutes, item.effort, item.note])];
-        const csv = rows.map((row) => row.map((value) => '"' + String(value).replaceAll('"', '""') + '"').join(",")).join("\r\n");
+        const csvCell = (value) => {
+            const text = String(value ?? "");
+            const safeText = /^[\u0000-\u0020]*[=+\-@]/.test(text) ? "'" + text : text;
+            return '"' + safeText.replaceAll('"', '""') + '"';
+        };
+        const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
         const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
         const link = document.createElement("a");
         link.href = url;
         link.download = "milepost-activity.csv";
+        link.hidden = true;
+        document.body.append(link);
         link.click();
-        URL.revokeObjectURL(url);
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
 
     return <section className={styles.fitnessDashboard} id="overview">

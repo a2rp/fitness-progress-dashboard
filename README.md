@@ -25,6 +25,8 @@ Activity sessions and the weekly goal are saved locally in this browser. They ar
 
 ## Run and check locally
 
+Use Node.js 20.19 or newer in the 20.x line, or 22.12 or newer, with npm.
+
 Install dependencies with `npm install`, then start the app with `npm run dev`. Use `npm run lint` for ESLint and `npm run build` for the production check. Use `npm run deploy` to build and publish `dist` to the `gh-pages` branch.
 
 ## Future improvements
