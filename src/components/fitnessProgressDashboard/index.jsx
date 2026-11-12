@@ -15,6 +15,17 @@ const moveDate = (value, offset) => {
     date.setDate(date.getDate() + offset);
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 };
+const calendarDaysBetween = (from, to) => {
+    const [fromYear, fromMonth, fromDay] = from.split("-").map(Number);
+    const [toYear, toMonth, toDay] = to.split("-").map(Number);
+    return Math.round((Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay)) / 86400000);
+};
+const isDateKey = (value) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
 const samples = [
     { id: 1, name: "Full body strength", category: "Strength", date: dateAt(0), minutes: 48, effort: "Moderate", note: "Steady tempo" },
     { id: 2, name: "Easy neighborhood run", category: "Run", date: dateAt(-1), minutes: 32, effort: "Easy", note: "Kept it conversational" },
@@ -25,12 +36,36 @@ const samples = [
 ];
 const categories = ["Strength", "Run", "Cycle", "Walk", "Mobility", "Other"];
 const readSessions = () => {
-    try { const value = localStorage.getItem(storageKey); return value ? JSON.parse(value) : samples; }
+    try {
+        const value = localStorage.getItem(storageKey);
+        if (value === null) return samples;
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed)) return samples;
+        return parsed.filter((item) => item && typeof item === "object"
+            && (typeof item.id === "number" || typeof item.id === "string")
+            && typeof item.name === "string"
+            && typeof item.category === "string"
+            && isDateKey(item.date)
+            && Number.isFinite(Number(item.minutes))
+            && Number(item.minutes) > 0
+            && typeof item.effort === "string");
+    }
     catch { return samples; }
 };
 const readGoal = () => {
-    const value = Number(localStorage.getItem(goalKey));
-    return Number.isFinite(value) && value > 0 ? value : 180;
+    try {
+        const value = Number(localStorage.getItem(goalKey));
+        return Number.isFinite(value) && value > 0 ? value : 180;
+    } catch {
+        return 180;
+    }
+};
+const writeLocalValue = (key, value) => {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // The dashboard remains usable when browser storage is unavailable.
+    }
 };
 const FitnessProgressDashboard = () => {
     const [sessions, setSessions] = useState(readSessions);
@@ -40,17 +75,18 @@ const FitnessProgressDashboard = () => {
     const [filter, setFilter] = useState("All activities");
     const [draft, setDraft] = useState({ name: "", category: "Strength", date: dateAt(0), minutes: "45", effort: "Moderate", note: "" });
     const [pendingDelete, setPendingDelete] = useState(null);
-    useEffect(() => localStorage.setItem(storageKey, JSON.stringify(sessions)), [sessions]);
-    useEffect(() => localStorage.setItem(goalKey, String(weeklyGoal)), [weeklyGoal]);
+    useEffect(() => writeLocalValue(storageKey, JSON.stringify(sessions)), [sessions]);
+    useEffect(() => writeLocalValue(goalKey, String(weeklyGoal)), [weeklyGoal]);
 
     const days = Number(period);
-    const visible = useMemo(() => sessions
+    const activitySessions = useMemo(() => sessions
+        .filter((item) => filter === "All activities" || item.category === filter), [sessions, filter]);
+    const visible = useMemo(() => activitySessions
         .filter((item) => {
-            const age = Math.floor((new Date(today + "T12:00:00").getTime() - new Date(item.date + "T12:00:00").getTime()) / 86400000);
+            const age = calendarDaysBetween(item.date, today);
             return age >= 0 && age < days;
         })
-        .filter((item) => filter === "All activities" || item.category === filter)
-        .sort((a, b) => b.date.localeCompare(a.date)), [sessions, days, filter, today]);
+        .sort((a, b) => b.date.localeCompare(a.date)), [activitySessions, days, today]);
     const periodMinutes = visible.reduce((sum, item) => sum + Number(item.minutes), 0);
     const periodDays = new Set(visible.map((item) => item.date)).size;
     const averageMinutes = visible.length ? Math.round(periodMinutes / visible.length) : 0;
@@ -60,14 +96,29 @@ const FitnessProgressDashboard = () => {
     const chart = period === "7"
         ? Array.from({ length: 7 }, (_, index) => {
             const date = moveDate(today, index - 6);
-            return { key: date, label: new Intl.DateTimeFormat("en", { weekday: "short" }).format(new Date(date + "T12:00:00")), minutes: sessions.filter((item) => item.date === date).reduce((sum, item) => sum + Number(item.minutes), 0) };
+            return { key: date, label: new Intl.DateTimeFormat("en", { weekday: "short" }).format(new Date(date + "T12:00:00")), minutes: activitySessions.filter((item) => item.date === date).reduce((sum, item) => sum + Number(item.minutes), 0) };
         })
-        : Array.from({ length: 4 }, (_, index) => {
-            const start = 29 - index * 7;
-            const end = index === 3 ? -1 : start - 7;
-            return { key: index, label: "Week " + (4 - index), minutes: sessions.filter((item) => { const ago = Math.floor((new Date(today + "T12:00:00").getTime() - new Date(item.date + "T12:00:00").getTime()) / 86400000); return ago <= start && ago > end; }).reduce((sum, item) => sum + Number(item.minutes), 0) };
-        });
-    const chartMax = Math.max(30, ...chart.map((item) => item.minutes));
+        : (() => {
+            const firstDay = moveDate(today, -29);
+            const firstWeek = moveDate(firstDay, -((new Date(firstDay + "T12:00:00").getDay() + 6) % 7));
+            const dateLabel = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
+            const weeks = [];
+
+            for (let weekStart = firstWeek; weekStart <= today; weekStart = moveDate(weekStart, 7)) {
+                const start = weekStart < firstDay ? firstDay : weekStart;
+                const weekEnd = moveDate(weekStart, 6);
+                const end = weekEnd > today ? today : weekEnd;
+                const minutes = activitySessions
+                    .filter((item) => item.date >= start && item.date <= end)
+                    .reduce((sum, item) => sum + Number(item.minutes), 0);
+
+                weeks.push({ key: weekStart, label: dateLabel.format(new Date(start + "T12:00:00")), minutes });
+            }
+
+            return weeks;
+        })();
+    const chartMax = Math.max(60, Math.ceil(Math.max(0, ...chart.map((item) => item.minutes)) / 60) * 60);
+    const chartAxis = [chartMax, chartMax * 2 / 3, chartMax / 3, 0].map(Math.round);
 
     const addSession = (event) => {
         event.preventDefault();
@@ -83,7 +134,8 @@ const FitnessProgressDashboard = () => {
         const rows = [["Date", "Activity", "Category", "Minutes", "Effort", "Note"], ...sessions.map((item) => [item.date, item.name, item.category, item.minutes, item.effort, item.note])];
         const csvCell = (value) => {
             const text = String(value ?? "");
-            const safeText = /^[\u0000-\u0020]*[=+\-@]/.test(text) ? "'" + text : text;
+            const firstMeaningfulCharacter = [...text].find((character) => character.charCodeAt(0) > 0x20);
+            const safeText = firstMeaningfulCharacter && ["=", "+", "-", "@"].includes(firstMeaningfulCharacter) ? "'" + text : text;
             return '"' + safeText.replaceAll('"', '""') + '"';
         };
         const csv = "\uFEFF" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -111,9 +163,9 @@ const FitnessProgressDashboard = () => {
         <div className={styles.dashboardGrid}>
             <section className={styles.chartCard} aria-labelledby="chart-title">
                 <div className={styles.cardHeading}><div><h2 id="chart-title">Your movement</h2><p>Minutes of activity over time</p></div><div className={styles.periodSwitch} role="group" aria-label="Chart range">{[["7", "7 days"], ["30", "30 days"]].map(([value, label]) => <button type="button" key={value} className={period === value ? styles.selectedPeriod : ""} aria-pressed={period === value} onClick={() => setPeriod(value)}>{label}</button>)}</div></div>
-                <div className={styles.chart} role="img" aria-label={(period === "7" ? "Daily" : "Weekly") + " workout minutes: " + chart.map((item) => item.label + " " + item.minutes).join(", ")}>
-                    <div className={styles.axis}>{[180, 120, 60, 0].map((value) => <span key={value}>{value}</span>)}</div>
-                    <div className={styles.chartPlot + (period === "30" ? " " + styles.monthChart : "")}>{chart.map((item, index) => <div className={styles.barGroup} key={item.key}><div className={styles.barSlot}><i className={index === chart.length - 1 ? styles.currentBar : ""} style={{ height: Math.max(4, item.minutes / chartMax * 100) + "%" }} title={item.minutes + " minutes"} /></div><span>{item.label}</span></div>)}</div>
+                <div className={styles.chart} role="img" aria-label={(period === "7" ? "Daily" : "Weekly") + " activity minutes for " + filter + ": " + chart.map((item) => item.label + " " + item.minutes).join(", ")}>
+                    <div className={styles.axis}>{chartAxis.map((value, index) => <span key={index}>{value}</span>)}</div>
+                    <div className={styles.chartPlot + (period === "30" ? " " + styles.monthChart : "")} style={{ "--chart-count": chart.length }}>{chart.map((item, index) => <div className={styles.barGroup} key={item.key}><div className={styles.barSlot}><i className={index === chart.length - 1 ? styles.currentBar : ""} style={{ height: Math.max(4, item.minutes / chartMax * 100) + "%" }} title={item.minutes + " minutes"} /></div><span>{item.label}</span></div>)}</div>
                 </div>
                 <div className={styles.chartFoot}><span><i /> Activity minutes</span><span>Keep a pace you can repeat</span></div>
             </section>

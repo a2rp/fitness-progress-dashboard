@@ -12,3 +12,32 @@
     @media (max-width: 680px) { .hero { align-items: flex-start; flex-direction: column; }.weekCard { width: 100%; }.stats { grid-template-columns: 1fr 1fr; gap: 7px; }.stats article { min-height: 72px; padding: 9px; }.stats article > strong { font-size: 17px; }.dashboardGrid { grid-template-columns: 1fr; }.chartCard { padding: 12px 10px; }.chart { height: 140px; gap: 6px; }.chartPlot { gap: 4px; }.goalPanel { padding: 13px; }.activityHeading { align-items: flex-start; flex-direction: column; }.activityTools { width: 100%; }.activityTools select { flex: 1; }.sessionRow { grid-template-columns: 33px minmax(0,1fr) 52px 24px; gap: 6px; padding: 6px 10px; }.effort { display: none; }.minutes { grid-column: 3; grid-row: 1; }.deleteButton { grid-column: 4; grid-row: 1; }.addForm { grid-template-columns: 1fr 1fr; padding: 11px; }.formHeading { grid-column: 1/-1; }.addForm > button { grid-column: 1/-1; } }
     @media (max-width: 400px) { .hero h1 { font-size: 38px; }.stats { grid-template-columns: 1fr 1fr; }.addForm { grid-template-columns: 1fr; }.formHeading { grid-column: auto; }.addForm > button { grid-column: auto; }.activityTools { flex-wrap: wrap; }.activityTools select { min-width: 100%; } }
 }
+
+.fitnessDashboard {
+    .context { font-size: 10px; }
+    .description { font-size: 14px; }
+    .weekCard > div:last-child > span { font-size: 9px; }
+    .weekCard strong { font-size: 19px; }
+    .weekCard strong small, .weekCard p { font-size: 11px; }
+    .stats article > span { font-size: 11px; }
+    .stats article > strong { font-size: 22px; }
+    .stats article > p { font-size: 10px; }
+    .cardHeading h2, .activityHeading h2 { font-size: 15px; }
+    .cardHeading p, .activityHeading p { font-size: 10px; }
+    .periodSwitch button { min-height: 27px; font-size: 10px; }
+    .axis, .barGroup > span, .chartFoot { font-size: 10px; }
+    .chartPlot.monthChart { grid-template-columns: repeat(var(--chart-count), minmax(0, 1fr)); gap: 4px; }
+    .goalHeading h2 { font-size: 13px; }
+    .goalHeading p, .goalFooter, .goalNumber span { font-size: 10px; }
+    .goalNumber strong { font-size: 30px; }
+    .goalFooter input { font-size: 11px; }
+    .encouragement p { font-size: 10px; }
+    .activityTools select, .activityTools button { font-size: 11px; }
+    .sessionName strong { font-size: 12px; }
+    .sessionName small, .effort, .minutes small, .moreNote { font-size: 10px; }
+    .minutes { font-size: 13px; }
+    .addForm label { font-size: 11px; }
+    .addForm label > input, .addForm select { font-size: 12px; }
+    .addForm > button { font-size: 12px; }
+    :is(button, input, select):focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+}
